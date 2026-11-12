@@ -97,7 +97,9 @@ svg{display:block}
 .sum{display:flex;background:var(--pink-weak);border-radius:18px;padding:18px 8px}
 .sum>div{flex:1;text-align:center}
 .sum>div+div{border-left:1px solid #f2d5e3}
-.sum.total{margin-top:10px;background:var(--bg2);padding:14px 8px}
+.totbtn{display:flex;align-items:center;gap:4px;margin:8px auto 0;font-size:13px;color:var(--sub);padding:4px 10px}
+.totbtn span.up{transform:rotate(180deg)}
+.sum.total{margin-top:4px;background:var(--bg2);padding:14px 8px}
 .sum.total .v{font-size:20px}
 .sum.total>div+div{border-color:#e2e2e8}
 .sum label{font-size:13px;color:var(--sub)}
@@ -229,7 +231,7 @@ let items = [];
 const today = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
 const pad = n => String(n).padStart(2,'0');
 const S = { tab:'cabinet', seg:'collect', cat:'全部', tag:'', sort:'recent', view:'list', q:'', searching:false,
-  month: today().slice(0,7), lf:'all' };
+  month: today().slice(0,7), lf:'all', showTotal:false };
 try { Object.assign(S, JSON.parse(localStorage.getItem('kitty-ui')||'{}'), {q:'',searching:false}); } catch(e){}
 function saveUI(){ try{ localStorage.setItem('kitty-ui', JSON.stringify({view:S.view,sort:S.sort,tab:S.tab})); }catch(e){} }
 
@@ -393,10 +395,11 @@ function renderLedger(){
     <div><label>本月收入</label>${sumHTML(inc,'in')}</div>
     <div><label>本月支出</label>${sumHTML(exp,'')}</div>
   </div>
-  <div class="sum total">
+  <button class="totbtn" data-act="total">${S.showTotal?'收起总收支':'查看总收支'} <span class="${S.showTotal?'up':''}">${ICON.down}</span></button>
+  ${S.showTotal?`<div class="sum total">
     <div><label>总收入</label>${sumHTML(tinc,'in')}</div>
     <div><label>总支出</label>${sumHTML(texp,'')}</div>
-  </div>
+  </div>`:''}
   <div class="lchips">
     <button data-lf="all" class="${S.lf==='all'?'on':''}">全部</button>
     <button data-lf="sell" class="${S.lf==='sell'?'on':''}">卖出</button>
@@ -433,6 +436,7 @@ $('#main').addEventListener('click', async e=>{
   const el = e.target.closest('[data-act],[data-view],[data-seg],[data-cat],[data-open],[data-del],[data-mon],[data-lf]');
   if (!el) return;
   const d = el.dataset;
+  if (d.act==='total'){ S.showTotal=!S.showTotal; render(); return; }
   if (d.act==='search'){ S.searching=!S.searching; if(!S.searching) S.q=''; render(); if(S.searching) $('#q').focus(); return; }
   if (d.view){ S.view=d.view; }
   else if (d.seg){ S.seg=d.seg; }
