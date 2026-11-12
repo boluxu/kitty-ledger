@@ -100,6 +100,7 @@ svg{display:block}
 
 /* ---------- ledger ---------- */
 .cats.lt{margin-top:-6px;margin-bottom:14px}
+.seg.lm{margin:2px 0 14px}
 .month{display:flex;align-items:center;justify-content:center;gap:22px;margin:2px 0 18px}
 .month .mbtn{position:relative;background:var(--bg2);border-radius:22px;height:44px;padding:0 20px;display:flex;align-items:center;gap:8px;font-size:19px;font-weight:700}
 .month .mbtn input{position:absolute;inset:0;opacity:0;width:100%}
@@ -284,7 +285,7 @@ let draftExtra = [];  // tags typed/selected during this edit: stay visible afte
 const today = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
 const pad = n => String(n).padStart(2,'0');
 const S = { tab:'cabinet', seg:'collect', cat:'全部', sort:'recent', view:'list', q:'', searching:false,
-  month: today().slice(0,7), lf:'all', ltag:'全部', showTotal:false };
+  month: today().slice(0,7), lf:'all', ltag:'全部', lmode:'all', showTotal:false };
 try { Object.assign(S, JSON.parse(localStorage.getItem('kitty-ui')||'{}'), {q:'',searching:false}); } catch(e){}
 function saveUI(){ try{ localStorage.setItem('kitty-ui', JSON.stringify({view:S.view,sort:S.sort,tab:S.tab})); }catch(e){} }
 
@@ -550,37 +551,42 @@ function renderLedger(){
   const [y,m] = S.month.split('-');
   const tags = allTags(); if (S.ltag!=='全部' && !tags.includes(S.ltag)) S.ltag='全部';
   const all = entries().filter(e => S.ltag==='全部' || (e.item.tags||[]).includes(S.ltag));
-  const month = all.filter(e=>e.date.startsWith(S.month));
+  const byMonth = S.lmode==='month';
+  const month = byMonth ? all.filter(e=>e.date.startsWith(S.month)) : all;
   const inc={}, exp={}, tinc={}, texp={};
   month.forEach(e=>{ const t = e.type==='sell'?inc:exp; t[e.cur]=(t[e.cur]||0)+e.amt; });
   all.forEach(e=>{ const t = e.type==='sell'?tinc:texp; t[e.cur]=(t[e.cur]||0)+e.amt; });
   const shown = month.filter(e => S.lf==='all' || (S.lf==='sell'&&e.type==='sell') || (S.lf==='buy'&&e.type==='buy'))
     .sort((a,b)=>b.date.localeCompare(a.date) || (b.item.createdAt-a.item.createdAt));
   let h = `
-  <div class="month">
+  <div class="seg lm">
+    <button data-lmode="all" class="${byMonth?'':'on'}">全部日期</button>
+    <button data-lmode="month" class="${byMonth?'on':''}">按月查看</button>
+  </div>
+  ${byMonth?`<div class="month">
     <button class="arrow" data-mon="-1">${ICON.back}</button>
     <label class="mbtn">${ICON.cal}${y}年 ${+m}月<input type="month" id="monSel" value="${S.month}"></label>
     <button class="arrow" data-mon="1">${ICON.next}</button>
-  </div>
+  </div>`:''}
   ${tags.length?`<div class="cats lt">${['全部',...tags].map(c=>`<button data-ltag="${esc(c)}" class="${S.ltag===c?'on':''}">${esc(c)}</button>`).join('')}</div>`:''}
   <div class="sum">
-    <div><label>本月收入</label>${sumHTML(inc,'in')}</div>
-    <div><label>本月支出</label>${sumHTML(exp,'')}</div>
+    <div><label>${byMonth?'本月收入':'总收入'}</label>${sumHTML(inc,'in')}</div>
+    <div><label>${byMonth?'本月支出':'总支出'}</label>${sumHTML(exp,'')}</div>
   </div>
-  <button class="totbtn" data-act="total">${S.showTotal?'收起总收支':'查看总收支'} <span class="${S.showTotal?'up':''}">${ICON.down}</span></button>
+  ${byMonth?`<button class="totbtn" data-act="total">${S.showTotal?'收起总收支':'查看总收支'} <span class="${S.showTotal?'up':''}">${ICON.down}</span></button>
   ${S.showTotal?`<div class="sum total">
     <div><label>总收入</label>${sumHTML(tinc,'in')}</div>
     <div><label>总支出</label>${sumHTML(texp,'')}</div>
-  </div>`:''}
+  </div>`:''}`:''}
   <div class="lchips">
     <button data-lf="all" class="${S.lf==='all'?'on':''}">全部</button>
     <button data-lf="sell" class="${S.lf==='sell'?'on':''}">卖出</button>
     <button data-lf="buy" class="${S.lf==='buy'?'on':''}">买入</button>
   </div>`;
-  if (!shown.length) return h + `<div class="empty">${ICON.receipt}${S.ltag!=='全部'?`「${esc(S.ltag)}」本月暂无记录`:'暂无记录'}</div>`;
+  if (!shown.length) return h + `<div class="empty">${ICON.receipt}${S.ltag!=='全部'?`「${esc(S.ltag)}」${byMonth?'本月':''}暂无记录`:'暂无记录'}</div>`;
   let last='';
   for (const e of shown){
-    if (e.date!==last){ last=e.date; const d=new Date(e.date+'T00:00:00'); h += `<div class="day"><span>${+e.date.slice(5,7)}月${+e.date.slice(8)}日 星期${'日一二三四五六'[d.getDay()]}</span></div>`; }
+    if (e.date!==last){ last=e.date; const d=new Date(e.date+'T00:00:00'); h += `<div class="day"><span>${e.date.slice(0,4)!==today().slice(0,4)?e.date.slice(0,4)+'年':''}${+e.date.slice(5,7)}月${+e.date.slice(8)}日 星期${'日一二三四五六'[d.getDay()]}</span></div>`; }
     const i=e.item;
     h += `<button class="entry" data-open="${esc(i.id)}">
       <div class="thumb" ${thumbAttr(i)}></div>
@@ -607,7 +613,7 @@ document.querySelector('.tabbar').addEventListener('click', e=>{
 $('#fab').onclick = () => openEditor(null);
 
 $('#main').addEventListener('click', async e=>{
-  const el = e.target.closest('[data-act],[data-view],[data-seg],[data-cat],[data-open],[data-del],[data-mon],[data-lf],[data-ltag]');
+  const el = e.target.closest('[data-act],[data-view],[data-seg],[data-cat],[data-open],[data-del],[data-mon],[data-lf],[data-ltag],[data-lmode]');
   if (!el) return;
   const d = el.dataset;
   if (d.act==='settings'){ openSettings(); return; }
@@ -618,6 +624,7 @@ $('#main').addEventListener('click', async e=>{
   else if (d.cat){ S.cat=d.cat; window.scrollTo(0,0); }
   else if (d.lf){ S.lf=d.lf; }
   else if (d.ltag){ S.ltag=d.ltag; }
+  else if (d.lmode){ S.lmode=d.lmode; }
   else if (d.mon){ const [y,m]=S.month.split('-').map(Number); const dt=new Date(y,m-1+Number(d.mon),1); S.month=dt.getFullYear()+'-'+pad(dt.getMonth()+1); }
   else if (d.open){ openEditor(items.find(i=>i.id===d.open)); return; }
   else if (d.del){
