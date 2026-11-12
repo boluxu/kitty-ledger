@@ -750,7 +750,7 @@ sheet.addEventListener('click', async e=>{
   else if (el.dataset.tg){ const t=el.dataset.tg; draft.tags = draft.tags.includes(t)? draft.tags.filter(x=>x!==t) : [...draft.tags,t]; dirty=true; }
   else if (el.id==='addTag'){ const v=$('#fTag').value.trim(); if(v && !draft.tags.includes(v)) draft.tags.push(v); if(v){ unhideTag(v); if(!draftExtra.includes(v)) draftExtra.push(v); $('#fTag').value=''; } dirty=true; }
   else if (el.id==='tagEdit'){ tagEdit=!tagEdit; }
-  else if (el.dataset.tghide){ const t=el.dataset.tghide; await setHidden(t, true); draftExtra=draftExtra.filter(x=>x!==t); }
+  else if (el.dataset.tghide){ const t=el.dataset.tghide; await setHidden(t, true); draftExtra=draftExtra.filter(x=>x!==t); if(draft.tags.includes(t)){ draft.tags=draft.tags.filter(x=>x!==t); dirty=true; } }
   else if (el.id==='eDel'){
     if (!confirm(`删除「${draft.name||'未命名'}」？`)) return;
     try { await DB.delItem(orig); } catch(err){ alert('删除失败：'+err.message); return; }
