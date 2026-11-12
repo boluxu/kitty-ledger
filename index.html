@@ -164,6 +164,10 @@ svg{display:block}
 .tagbox{display:flex;flex-wrap:wrap;gap:7px}
 .tag{font-size:14px;padding:5px 10px;border-radius:14px;background:var(--bg2);color:#55555c;display:flex;align-items:center;gap:4px}
 .tag.on{background:var(--pink);color:#fff}
+.tag.rm{background:#fff;border:1px dashed var(--red);color:var(--red)}
+.tagrow .top .tedit{margin-left:auto;font-size:14px;color:var(--pink);padding:4px 2px}
+.tmrow .tn small.hid{color:var(--red)}
+.tmrow button.show{width:auto;padding:0 10px;color:var(--pink);font-size:14px}
 .tagadd{display:flex;gap:8px;margin-top:10px}
 .tagadd input{flex:1;height:38px;border-radius:10px;border:0;background:var(--bg2);padding:0 12px;outline:none}
 .tagadd button{height:38px;padding:0 14px;border-radius:10px;background:var(--pink-soft);color:var(--pink);font-weight:600}
@@ -272,7 +276,9 @@ const fromRec = r => r && r.buf ? new Blob([r.buf], {type: r.type || 'image/jpeg
 /* ================= state ================= */
 const CUR = {CNY:'¥',JPY:'J¥',AUD:'A$',USD:'$',HKD:'HK$',TWD:'NT$',KRW:'₩',EUR:'€',GBP:'£'};
 let items = [];
-let tagOrder = [];   // user-chosen order of tags (meta 'tagOrder')
+let tagOrder = [];
+let hiddenTags = [];  // tags not offered when adding/editing an item (meta 'hiddenTags'); items keep them
+let tagEdit = false;   // user-chosen order of tags (meta 'tagOrder')
 const today = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
 const pad = n => String(n).padStart(2,'0');
 const S = { tab:'cabinet', seg:'collect', cat:'全部', sort:'recent', view:'list', q:'', searching:false,
@@ -397,6 +403,11 @@ function allTags(){
   const ord = tagOrder.filter(t=>s.has(t));
   return [...ord, ...[...s].filter(t=>!ord.includes(t))];
 }
+async function setHidden(t, hide){
+  hiddenTags = hide ? [...new Set([...hiddenTags, t])] : hiddenTags.filter(x=>x!==t);
+  try { await DB.setMeta('hiddenTags', hiddenTags); } catch(err){ alert('保存失败：'+err.message); }
+}
+function unhideTag(t){ if (hiddenTags.includes(t)) setHidden(t, false); }
 const cleanOrder = a => Array.isArray(a) ? [...new Set(a.filter(t=>typeof t==='string'&&t.trim()).map(t=>t.trim().slice(0,40)))] : [];
 function filtered(){
   const q = S.q.trim().toLowerCase();
@@ -627,7 +638,7 @@ $('#main').addEventListener('change', e=>{
    draft.photos: [{id, url, rec?}]  rec present = newly added, not yet saved */
 let draft=null, orig=null, isNew=false, dirty=false, busy=false;
 async function openEditor(item){
-  isNew = !item; dirty=false; orig = item || null;
+  isNew = !item; dirty=false; orig = item || null; tagEdit = false;
   draft = item ? {...item, tags:[...item.tags], photos:[]} : {
     id:uid(), name:'', status: S.seg==='sold'?'sold':'collect', tags: S.cat!=='全部'?[S.cat]:[],
     buyDate:today(), currency:'CNY', buyPrice:null, sellPrice:null, sellDate:'', note:'', photoIds:[], photos:[], createdAt:Date.now()
@@ -651,7 +662,8 @@ function row(icColor, icon, label, valHTML){
 const mi = p => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 function renderEditor(){
   const d = draft; const sym = CUR[d.currency]||'';
-  const known = allTags();
+  const known = allTags().filter(t=>!hiddenTags.includes(t));
+  if (!known.length) tagEdit = false;
   $('#sheet').innerHTML = `
   <div class="ebar">
     <button class="circle" id="eBack">${ICON.back}</button>
@@ -667,8 +679,11 @@ function renderEditor(){
       ${row('#3b82f6', mi('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/>'),'名称',`<input id="fName" placeholder="输入名称" value="${esc(d.name)}">`)}
       ${row('#ef5fa7', mi('<path d="M3 9h18M3 15h18"/>'),'当前状态',`<div class="mini-seg"><button data-st="collect" class="${d.status==='collect'?'on':''}">收藏中</button><button data-st="sold" class="${d.status==='sold'?'on':''}">已出售</button></div>`)}
       <div class="row tagrow">
-        <div class="top"><span class="ic" style="background:#8b5cf6">${mi('<path d="M7 7h.01M3 3h8l10 10-8 8L3 11z"/>')}</span><label>标签</label></div>
-        <div class="tagbox">${known.map(t=>`<button class="tag ${d.tags.includes(t)?'on':''}" data-tg="${esc(t)}">${esc(t)}</button>`).join('')}
+        <div class="top"><span class="ic" style="background:#8b5cf6">${mi('<path d="M7 7h.01M3 3h8l10 10-8 8L3 11z"/>')}</span><label>标签</label>${known.length?`<button class="tedit" id="tagEdit">${tagEdit?'完成':'移除'}</button>`:''}</div>
+        ${tagEdit?'<p class="hint" style="margin:0 0 8px;font-size:12px;color:var(--sub)">点标签把它从这里移除（已有物品上的标签不受影响，输入同名标签可重新出现）</p>':''}
+        <div class="tagbox">${tagEdit
+          ? known.map(t=>`<button class="tag rm" data-tghide="${esc(t)}">${esc(t)} ✕</button>`).join('')
+          : known.map(t=>`<button class="tag ${d.tags.includes(t)?'on':''}" data-tg="${esc(t)}">${esc(t)}</button>`).join('')}
           ${d.tags.filter(t=>!known.includes(t)).map(t=>`<button class="tag on" data-tg="${esc(t)}">${esc(t)}</button>`).join('')}</div>
         <div class="tagadd"><input id="fTag" placeholder="新标签，如 IP 名 kitty"><button id="addTag">添加</button></div>
       </div>
@@ -730,7 +745,9 @@ sheet.addEventListener('click', async e=>{
   if (el.dataset.rmph!==undefined){ const [p]=draft.photos.splice(+el.dataset.rmph,1); if(p) URL.revokeObjectURL(p.url); dirty=true; }
   else if (el.dataset.st){ draft.status=el.dataset.st; if(draft.status==='sold' && !draft.sellDate) draft.sellDate=today(); dirty=true; }
   else if (el.dataset.tg){ const t=el.dataset.tg; draft.tags = draft.tags.includes(t)? draft.tags.filter(x=>x!==t) : [...draft.tags,t]; dirty=true; }
-  else if (el.id==='addTag'){ const v=$('#fTag').value.trim(); if(v && !draft.tags.includes(v)) draft.tags.push(v); dirty=true; }
+  else if (el.id==='addTag'){ const v=$('#fTag').value.trim(); if(v && !draft.tags.includes(v)) draft.tags.push(v); if(v) unhideTag(v); dirty=true; }
+  else if (el.id==='tagEdit'){ tagEdit=!tagEdit; }
+  else if (el.dataset.tghide){ await setHidden(el.dataset.tghide, true); }
   else if (el.id==='eDel'){
     if (!confirm(`删除「${draft.name||'未命名'}」？`)) return;
     try { await DB.delItem(orig); } catch(err){ alert('删除失败：'+err.message); return; }
@@ -793,7 +810,8 @@ function openTagManager(){
       <p>按住左边的 ≡ 上下拖动，调整主界面和新增物品时的标签顺序。删除标签只会把它从物品上去掉，物品本身不会删除。</p>
       <div class="tmlist">${tags.length ? tags.map((t,k)=>`<div class="tmrow">
         <span class="grip" aria-label="拖动排序"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg></span>
-        <div class="tn">${esc(t)}<small>${cnt(t)} 件</small></div>
+        <div class="tn">${esc(t)}<small>${cnt(t)} 件</small>${hiddenTags.includes(t)?'<small class="hid">新增时不显示</small>':''}</div>
+        ${hiddenTags.includes(t)?`<button class="show" data-tshow="${k}">恢复</button>`:''}
         <button class="del" data-tdel="${k}">删除</button>
       </div>`).join('') : '<div class="tmempty">还没有标签。在新增物品时输入标签后，会出现在这里。</div>'}</div>
       <div class="mbtns"><button class="pk" data-m="close">完成</button></div></div>`;
@@ -804,7 +822,8 @@ function openTagManager(){
     if (b.dataset.m==='close') return m.remove();
     const tags = allTags();
     try {
-      if (b.dataset.tdel!==undefined){
+      if (b.dataset.tshow!==undefined){ await setHidden(tags[+b.dataset.tshow], false); }
+      else if (b.dataset.tdel!==undefined){
         const t = tags[+b.dataset.tdel]; if (t===undefined) return;
         const used = items.filter(i=>(i.tags||[]).includes(t));
         if (!confirm(`删除标签「${t}」？\n${used.length} 件物品会去掉这个标签，物品本身不会删除。`)) return;
@@ -812,6 +831,7 @@ function openTagManager(){
         await DB.putItems(changed);
         const byId = new Map(changed.map(i=>[i.id,i])); items = items.map(i=>byId.get(i.id)||i);
         tagOrder = tagOrder.filter(x=>x!==t); await DB.setMeta('tagOrder', tagOrder);
+        if (hiddenTags.includes(t)) await setHidden(t, false);
         if (S.cat===t) S.cat='全部';
         toast('已删除标签');
       } else return;
@@ -861,7 +881,7 @@ function openTagManager(){
 async function exportData(btn){
   const label = btn.textContent; btn.disabled = true;
   try {
-    const parts = [`{"app":"kitty-ledger","version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"tagOrder":${JSON.stringify(allTags())},"items":[`];
+    const parts = [`{"app":"kitty-ledger","version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"tagOrder":${JSON.stringify(allTags())},"hiddenTags":${JSON.stringify(hiddenTags)},"items":[`];
     for (let k=0; k<items.length; k++){
       const it = items[k]; btn.textContent = `正在打包 ${k+1}/${items.length}…`;
       const photos = [];
@@ -893,6 +913,7 @@ $('#fileImport').addEventListener('change', async e=>{
       if (n%10===0) toast(`正在恢复 ${n}/${d.items.length}…`, 10000);
     }
     items = (await DB.all()).map(sanitize).filter(Boolean);
+    if (Array.isArray(d.hiddenTags)){ hiddenTags = cleanOrder(d.hiddenTags); await DB.setMeta('hiddenTags', hiddenTags); }
     if (Array.isArray(d.tagOrder)){ tagOrder = cleanOrder(d.tagOrder); await DB.setMeta('tagOrder', tagOrder); }
     document.querySelector('.modal')?.remove(); render(); toast(`已恢复 ${n} 件`);
   }catch(err){ alert('恢复失败：'+err.message); }
@@ -927,6 +948,7 @@ async function shrinkOldPhotos(){
     }
     items = (legacy.length ? await DB.all() : raw).map(sanitize).filter(Boolean);
     tagOrder = cleanOrder(await DB.getMeta('tagOrder'));
+    hiddenTags = cleanOrder(await DB.getMeta('hiddenTags'));
     await shrinkOldPhotos();
   }
   catch(e){ alert('本地数据库打开失败：'+e.message); }
