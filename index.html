@@ -276,9 +276,10 @@ const fromRec = r => r && r.buf ? new Blob([r.buf], {type: r.type || 'image/jpeg
 /* ================= state ================= */
 const CUR = {CNY:'¥',JPY:'J¥',AUD:'A$',USD:'$',HKD:'HK$',TWD:'NT$',KRW:'₩',EUR:'€',GBP:'£'};
 let items = [];
-let tagOrder = [];
+let tagOrder = [];   // user-chosen order of tags (meta 'tagOrder')
 let hiddenTags = [];  // tags not offered when adding/editing an item (meta 'hiddenTags'); items keep them
-let tagEdit = false;   // user-chosen order of tags (meta 'tagOrder')
+let tagEdit = false;
+let draftExtra = [];  // tags typed/selected during this edit: stay visible after being toggled off
 const today = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
 const pad = n => String(n).padStart(2,'0');
 const S = { tab:'cabinet', seg:'collect', cat:'全部', sort:'recent', view:'list', q:'', searching:false,
@@ -639,6 +640,7 @@ $('#main').addEventListener('change', e=>{
 let draft=null, orig=null, isNew=false, dirty=false, busy=false;
 async function openEditor(item){
   isNew = !item; dirty=false; orig = item || null; tagEdit = false;
+  draftExtra = item ? [...item.tags] : [];
   draft = item ? {...item, tags:[...item.tags], photos:[]} : {
     id:uid(), name:'', status: S.seg==='sold'?'sold':'collect', tags: S.cat!=='全部'?[S.cat]:[],
     buyDate:today(), currency:'CNY', buyPrice:null, sellPrice:null, sellDate:'', note:'', photoIds:[], photos:[], createdAt:Date.now()
@@ -662,7 +664,8 @@ function row(icColor, icon, label, valHTML){
 const mi = p => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 function renderEditor(){
   const d = draft; const sym = CUR[d.currency]||'';
-  const known = allTags().filter(t=>!hiddenTags.includes(t));
+  const base = allTags().filter(t=>!hiddenTags.includes(t));
+  const known = [...base, ...draftExtra.filter(t=>!base.includes(t) && !(hiddenTags.includes(t) && !d.tags.includes(t)))];
   if (!known.length) tagEdit = false;
   $('#sheet').innerHTML = `
   <div class="ebar">
@@ -745,9 +748,9 @@ sheet.addEventListener('click', async e=>{
   if (el.dataset.rmph!==undefined){ const [p]=draft.photos.splice(+el.dataset.rmph,1); if(p) URL.revokeObjectURL(p.url); dirty=true; }
   else if (el.dataset.st){ draft.status=el.dataset.st; if(draft.status==='sold' && !draft.sellDate) draft.sellDate=today(); dirty=true; }
   else if (el.dataset.tg){ const t=el.dataset.tg; draft.tags = draft.tags.includes(t)? draft.tags.filter(x=>x!==t) : [...draft.tags,t]; dirty=true; }
-  else if (el.id==='addTag'){ const v=$('#fTag').value.trim(); if(v && !draft.tags.includes(v)) draft.tags.push(v); if(v) unhideTag(v); dirty=true; }
+  else if (el.id==='addTag'){ const v=$('#fTag').value.trim(); if(v && !draft.tags.includes(v)) draft.tags.push(v); if(v){ unhideTag(v); if(!draftExtra.includes(v)) draftExtra.push(v); $('#fTag').value=''; } dirty=true; }
   else if (el.id==='tagEdit'){ tagEdit=!tagEdit; }
-  else if (el.dataset.tghide){ await setHidden(el.dataset.tghide, true); }
+  else if (el.dataset.tghide){ const t=el.dataset.tghide; await setHidden(t, true); draftExtra=draftExtra.filter(x=>x!==t); }
   else if (el.id==='eDel'){
     if (!confirm(`删除「${draft.name||'未命名'}」？`)) return;
     try { await DB.delItem(orig); } catch(err){ alert('删除失败：'+err.message); return; }
