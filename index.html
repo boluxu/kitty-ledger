@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="收藏柜">
+<meta name="theme-color" content="#ffffff">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<title>Kitty 收藏柜</title>
+<style>
+:root{
+  --pink:#ef5fa7; --pink-soft:#fde8f2; --pink-weak:#fff5fa;
+  --red:#e5484d; --green:#2f9e6b;
+  --bg:#ffffff; --bg2:#f4f4f7; --line:#ececf0;
+  --text:#1f1f24; --sub:#8e8e96; --chip:#ececf0;
+  --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,select,textarea{font:inherit;font-size:16px;color:inherit}
+svg{display:block}
+.hidden{display:none!important}
+
+/* ---------- layout ---------- */
+#main{padding:calc(var(--safe-t) + 14px) 16px calc(96px + var(--safe-b));max-width:640px;margin:0 auto}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  display:flex;justify-content:space-around;align-items:flex-end;padding:6px 0 calc(6px + var(--safe-b))}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--sub)}
+.tab.on{color:var(--pink)}
+.fab-wrap{flex:1;display:flex;justify-content:center}
+.fab{width:60px;height:60px;border-radius:50%;background:var(--pink);color:#fff;margin-top:-30px;
+  box-shadow:0 0 0 6px #fff,0 8px 22px rgba(239,95,167,.35);display:flex;align-items:center;justify-content:center}
+
+/* ---------- cabinet ---------- */
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:16px}
+.head h1{font-size:30px;margin:0;font-weight:800;letter-spacing:.5px}
+.head p{margin:4px 0 0;color:var(--sub);font-size:13px}
+.head-btns{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.circle{width:40px;height:40px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center}
+.toggle{display:flex;background:var(--bg2);border-radius:12px;padding:3px}
+.toggle button{width:36px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#8e8e96}
+.toggle button.on{background:#fff;color:var(--pink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.search{display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:12px;padding:0 12px;margin-bottom:12px}
+.search input{flex:1;border:0;background:transparent;height:40px;outline:none}
+.seg{display:flex;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:6px}
+.seg button{flex:1;height:40px;border-radius:11px;font-size:16px;color:var(--sub);font-weight:600}
+.seg button.on{background:#fff;color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.seg small{font-weight:400;font-size:12px;margin-left:3px;color:var(--sub)}
+.cats{display:flex;gap:22px;overflow-x:auto;scrollbar-width:none;padding:10px 2px 0;margin:0 -16px;padding-left:18px;padding-right:18px}
+.cats::-webkit-scrollbar{display:none}
+.cats button{flex-shrink:0;font-size:16px;color:#55555c;padding-bottom:9px;border-bottom:3px solid transparent}
+.cats button.on{color:var(--pink);border-color:var(--pink);font-weight:600}
+.filters{display:flex;gap:10px;margin:12px 0 4px}
+.pick{flex:1;position:relative;height:44px;background:var(--bg2);border-radius:12px;color:var(--pink);font-size:15px;
+  display:flex;align-items:center;justify-content:center;gap:4px;overflow:hidden}
+.pick select{position:absolute;inset:0;opacity:0;width:100%}
+.pick span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%}
+
+.card{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);align-items:center}
+.thumb{width:92px;height:92px;border-radius:12px;background:var(--bg2) center/cover no-repeat;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;color:#c4c4cc}
+.card .body{flex:1;min-width:0}
+.card h3{margin:0 0 6px;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.chip{font-size:12px;padding:2px 7px;border-radius:6px;background:var(--chip);color:#55555c}
+.chip.p{background:var(--pink);color:#fff}
+.chip.s{background:var(--pink-soft);color:var(--pink)}
+.meta{font-size:13px;color:#55555c;display:flex;flex-wrap:wrap;gap:2px 12px}
+.meta .sold{color:var(--green)}
+.actions{display:flex;flex-direction:column;gap:18px;align-self:stretch;justify-content:center}
+.actions button{color:var(--pink);padding:4px}
+.actions button.del{color:var(--red)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}
+.gcard{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.07);text-align:left}
+.gcard .thumb{width:100%;height:auto;aspect-ratio:1;border-radius:0}
+.gcard .gb{padding:8px 10px 10px}
+.gcard h3{margin:0 0 3px;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gcard .meta{font-size:12px}
+.empty{text-align:center;color:var(--sub);padding:70px 0;font-size:15px}
+.empty svg{margin:0 auto 14px;color:#cfcfd6}
+
+/* ---------- ledger ---------- */
+.month{display:flex;align-items:center;justify-content:center;gap:22px;margin:2px 0 18px}
+.month .mbtn{position:relative;background:var(--bg2);border-radius:22px;height:44px;padding:0 20px;display:flex;align-items:center;gap:8px;font-size:19px;font-weight:700}
+.month .mbtn input{position:absolute;inset:0;opacity:0;width:100%}
+.month .arrow{width:36px;height:36px;display:flex;align-items:center;justify-content:center}
+.sum{display:flex;background:var(--pink-weak);border-radius:18px;padding:18px 8px}
+.sum>div{flex:1;text-align:center}
+.sum>div+div{border-left:1px solid #f2d5e3}
+.sum.total{margin-top:10px;background:var(--bg2);padding:14px 8px}
+.sum.total .v{font-size:20px}
+.sum.total>div+div{border-color:#e2e2e8}
+.sum label{font-size:13px;color:var(--sub)}
+.sum .v{font-size:24px;font-weight:700;margin-top:6px;line-height:1.25}
+.sum .v small{font-size:15px}
+.sum .v.in{color:var(--red)}
+.sum .v .x{display:block;font-size:13px;font-weight:600}
+.lchips{display:flex;gap:10px;margin:14px 0 6px}
+.lchips button{flex:1;height:38px;border-radius:19px;background:var(--bg2);color:#6b6b73;font-size:15px}
+.lchips button.on{background:var(--pink-soft);color:var(--pink);font-weight:600}
+.day{font-size:13px;color:var(--sub);margin:16px 0 2px;display:flex;justify-content:space-between}
+.entry{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.entry .thumb{width:46px;height:46px;border-radius:10px}
+.entry .nm{flex:1;min-width:0}
+.entry .nm b{display:block;font-weight:500;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.entry .nm span{font-size:12px;color:var(--sub)}
+.entry .amt{font-size:17px;font-weight:600;white-space:nowrap}
+.entry .amt.in{color:var(--red)}
+
+/* ---------- editor ---------- */
+.sheet{position:fixed;inset:0;z-index:50;background:var(--bg2);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  transform:translateY(100%);transition:transform .28s ease}
+.sheet.open{transform:none}
+.ebar{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;
+  padding:calc(var(--safe-t) + 10px) 16px 10px;background:rgba(244,244,247,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.ebar h2{margin:0;font-size:17px;font-weight:600}
+.ebar .circle{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.save{background:var(--pink);color:#fff;border-radius:20px;height:36px;padding:0 18px;font-weight:600}
+.ebody{max-width:640px;margin:0 auto;padding:4px 16px calc(40px + var(--safe-b))}
+.photos{display:flex;gap:10px;overflow-x:auto;padding:6px 0 16px;scrollbar-width:none}
+.photos::-webkit-scrollbar{display:none}
+.ph{position:relative;width:150px;height:150px;flex-shrink:0;border-radius:14px;background:#fff center/cover no-repeat}
+.ph .x{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;
+  display:flex;align-items:center;justify-content:center}
+.ph.add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--pink);
+  border:2px dashed #f3b6d4;background:#fff;font-size:14px}
+.group{background:#fff;border-radius:18px;padding:0 16px;margin-bottom:16px}
+.row{display:flex;align-items:center;gap:12px;min-height:54px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .ic{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.row>label{font-size:16px;flex-shrink:0;min-width:70px}
+.row .val{flex:1;min-width:0;display:flex;justify-content:flex-end}
+.row input,.row select{border:0;outline:none;background:transparent;text-align:right;width:100%;min-width:0;color:#3a3a40;height:44px}
+.row input::placeholder{color:#b6b6be}
+.row select{text-align-last:right;-webkit-appearance:none;appearance:none}
+.row input[type=date]{-webkit-appearance:none;appearance:none;display:flex;justify-content:flex-end}
+.row input[type=date]::-webkit-date-and-time-value{text-align:right}
+.mini-seg{display:flex;background:var(--bg2);border-radius:10px;padding:3px}
+.mini-seg button{padding:0 12px;height:30px;border-radius:8px;font-size:14px;color:var(--sub)}
+.mini-seg button.on{background:var(--pink);color:#fff;font-weight:600}
+.tagrow{display:block;padding:12px 0}
+.tagrow .top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.tagbox{display:flex;flex-wrap:wrap;gap:7px}
+.tag{font-size:14px;padding:5px 10px;border-radius:14px;background:var(--bg2);color:#55555c;display:flex;align-items:center;gap:4px}
+.tag.on{background:var(--pink);color:#fff}
+.tagadd{display:flex;gap:8px;margin-top:10px}
+.tagadd input{flex:1;height:38px;border-radius:10px;border:0;background:var(--bg2);padding:0 12px;outline:none}
+.tagadd button{height:38px;padding:0 14px;border-radius:10px;background:var(--pink-soft);color:var(--pink);font-weight:600}
+.note{width:100%;min-height:90px;border:0;outline:none;resize:vertical;padding:12px 0;background:transparent}
+.dangerbtn{width:100%;height:50px;border-radius:14px;background:#fff;color:var(--red);font-size:16px;font-weight:600}
+
+/* ---------- settings / toast ---------- */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center}
+.modal .box{background:#fff;width:100%;max-width:640px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + var(--safe-b))}
+.modal h3{margin:0 0 4px;font-size:18px}
+.modal p{margin:0 0 14px;color:var(--sub);font-size:13px;line-height:1.5}
+.mbtns{display:flex;flex-direction:column;gap:10px}
+.mbtns button{height:48px;border-radius:12px;background:var(--bg2);font-size:16px}
+.mbtns button.pk{background:var(--pink);color:#fff;font-weight:600}
+.modal textarea{width:100%;min-height:70px;border-radius:12px;border:0;background:var(--bg2);padding:10px 12px;outline:none;margin-bottom:10px}
+#toast{position:fixed;left:50%;bottom:calc(110px + var(--safe-b));transform:translateX(-50%);background:rgba(30,30,34,.88);color:#fff;
+  padding:10px 18px;border-radius:20px;font-size:14px;z-index:99;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="main"></div>
+
+<nav class="tabbar">
+  <button class="tab" data-tab="cabinet" id="tab-cabinet">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+    收藏柜
+  </button>
+  <div class="fab-wrap"><button class="fab" id="fab" aria-label="添加">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button></div>
+  <button class="tab" data-tab="ledger" id="tab-ledger">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M2 5.5C4.5 4 8 4 11 5.5v14C8 18 4.5 18 2 19.5z"/><path d="M22 5.5C19.5 4 16 4 13 5.5v14c3-1.5 6.5-1.5 9 0z"/></svg>
+    账本
+  </button>
+</nav>
+
+<div class="sheet" id="sheet"></div>
+<input type="file" id="filePhoto" accept="image/*" multiple class="hidden">
+<input type="file" id="fileImport" accept="application/json,.json" class="hidden">
+<div id="toast"></div>
+
+<script>
+/* ================= storage (IndexedDB) ================= */
+const DB = (() => {
+  let dbp;
+  function open(){
+    if(!dbp) dbp = new Promise((res,rej)=>{
+      const r = indexedDB.open('kitty-ledger',1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('items',{keyPath:'id'}); r.result.createObjectStore('meta'); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return dbp;
+  }
+  async function tx(store, mode, fn){
+    const db = await open();
+    return new Promise((res,rej)=>{
+      const t = db.transaction(store, mode); const s = t.objectStore(store);
+      const out = fn(s); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error);
+    });
+  }
+  return {
+    all: () => tx('items','readonly',s=>s.getAll()),
+    put: it => tx('items','readwrite',s=>{s.put(it)}),
+    del: id => tx('items','readwrite',s=>{s.delete(id)}),
+    getMeta: k => tx('meta','readonly',s=>s.get(k)),
+    setMeta: (k,v) => tx('meta','readwrite',s=>{s.put(v,k)}),
+  };
+})();
+
+/* ================= state ================= */
+const CUR = {CNY:'¥',JPY:'J¥',AUD:'A$',USD:'$',HKD:'HK$',TWD:'NT$',KRW:'₩',EUR:'€',GBP:'£'};
+let items = [];
+const today = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
+const pad = n => String(n).padStart(2,'0');
+const S = { tab:'cabinet', seg:'collect', cat:'全部', tag:'', sort:'recent', view:'list', q:'', searching:false,
+  month: today().slice(0,7), lf:'all' };
+try { Object.assign(S, JSON.parse(localStorage.getItem('kitty-ui')||'{}'), {q:'',searching:false}); } catch(e){}
+function saveUI(){ try{ localStorage.setItem('kitty-ui', JSON.stringify({view:S.view,sort:S.sort,tab:S.tab})); }catch(e){} }
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = (v,cur='CNY') => (CUR[cur]||cur+' ') + (Math.round(v*100)/100).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+const money2 = (v,cur='CNY') => (CUR[cur]||cur+' ') + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const fmtDate = d => d ? d.replace(/^(\d{4})-(\d{2})-(\d{2})$/,(_,y,m,dd)=>`${y}.${m}.${dd}`) : '';
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
+const isNum = v => typeof v==='number' && isFinite(v);
+const isPhoto = p => typeof p==='string' && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(p);
+const isDate = v => typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+function sanitize(it){
+  if (!it || typeof it!=='object') return null;
+  const str = (v,n=500) => typeof v==='string' ? v.slice(0,n) : '';
+  return {
+    id: /^[a-z0-9]{6,40}$/.test(it.id) ? it.id : uid(),
+    name: str(it.name,200), status: it.status==='sold'?'sold':'collect',
+    tags: Array.isArray(it.tags) ? [...new Set(it.tags.filter(t=>typeof t==='string'&&t.trim()).map(t=>t.trim().slice(0,40)))] : [],
+    buyDate: isDate(it.buyDate)?it.buyDate:'', sellDate: isDate(it.sellDate)?it.sellDate:'',
+    currency: CUR[it.currency] ? it.currency : 'CNY',
+    buyPrice: isNum(it.buyPrice)?it.buyPrice:null, sellPrice: isNum(it.sellPrice)?it.sellPrice:null,
+    note: str(it.note,5000), photos: Array.isArray(it.photos) ? it.photos.filter(isPhoto) : [],
+    createdAt: isNum(it.createdAt)?it.createdAt:Date.now(), updatedAt: isNum(it.updatedAt)?it.updatedAt:Date.now(),
+  };
+}
+
+const ICON = {
+  search:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+  grid:'<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>',
+  list:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
+  gear:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  edit:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5"/><path d="M17.5 2.5a2.1 2.1 0 0 1 3 3L12 14l-4 1 1-4z"/></svg>',
+  trash:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg>',
+  down:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+  back:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  next:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  cal:'<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2zm-2 7v10h14V9z"/><rect x="7" y="11" width="2" height="2"/><rect x="11" y="11" width="2" height="2"/><rect x="15" y="11" width="2" height="2"/><rect x="7" y="15" width="2" height="2"/><rect x="11" y="15" width="2" height="2"/></svg>',
+  img:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>',
+  cam:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+  x:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  receipt:'<svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M6 3h13v15a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-2h3z"/><path d="M6 16v2a3 3 0 0 0 3 3M10 8h6M10 12h6"/></svg>',
+};
+
+/* ================= cabinet ================= */
+function allTags(){ const s=new Set(); [...items].sort((a,b)=>a.createdAt-b.createdAt).forEach(i=>(i.tags||[]).forEach(t=>s.add(t))); return [...s]; }
+function filtered(){
+  const q = S.q.trim().toLowerCase();
+  let list = items.filter(i => i.status === S.seg);
+  if (S.cat !== '全部') list = list.filter(i => (i.tags||[]).includes(S.cat));
+  if (q) list = list.filter(i => (i.name||'').toLowerCase().includes(q) || (i.tags||[]).some(t=>t.toLowerCase().includes(q)) || (i.note||'').toLowerCase().includes(q));
+  const by = {
+    recent:(a,b)=>b.createdAt-a.createdAt,
+    oldest:(a,b)=>a.createdAt-b.createdAt,
+    buyDate:(a,b)=>(b.buyDate||'').localeCompare(a.buyDate||'')||b.createdAt-a.createdAt,
+    priceDesc:(a,b)=>(b.buyPrice||0)-(a.buyPrice||0),
+    priceAsc:(a,b)=>(a.buyPrice||0)-(b.buyPrice||0),
+    name:(a,b)=>(a.name||'').localeCompare(b.name||'','zh'),
+  };
+  return list.sort(by[S.sort]||by.recent);
+}
+const SORTS = {recent:'最近收录',oldest:'最早收录',buyDate:'购买日期',priceDesc:'价格从高到低',priceAsc:'价格从低到高',name:'名称'};
+
+function thumbStyle(i){ return i.photos && i.photos[0] ? `style="background-image:url('${i.photos[0]}')"` : ''; }
+function tagChips(i){
+  return (i.tags||[]).map(t => `<span class="chip p">${esc(t)}</span>`).join('') || '<span class="chip s">未分类</span>';
+}
+function metaLine(i){
+  const c=i.currency||'CNY'; let h='';
+  h += `<span>购买 ${isNum(i.buyPrice)?money(i.buyPrice,c):'—'}</span>`;
+  if (i.status==='sold') h += `<span class="sold">卖出 ${isNum(i.sellPrice)?money(i.sellPrice,c):'—'}</span>`;
+  const d = i.status==='sold' ? (i.sellDate||i.buyDate) : i.buyDate;
+  if (d) h += `<span>${fmtDate(d)}</span>`;
+  return h;
+}
+
+function renderCabinet(){
+  const list = filtered();
+  const nC = items.filter(i=>i.status==='collect').length, nS = items.filter(i=>i.status==='sold').length;
+  const tags = allTags(); if (S.cat!=='全部' && !tags.includes(S.cat)) S.cat='全部';
+  let h = `
+  <div class="head">
+    <div><h1>收藏柜</h1><p>记录你的 Hello Kitty 收藏</p></div>
+    <div class="head-btns">
+      <button class="circle" data-act="settings" aria-label="设置">${ICON.gear}</button>
+      <button class="circle" data-act="search" aria-label="搜索">${ICON.search}</button>
+      <div class="toggle"><button data-view="grid" class="${S.view==='grid'?'on':''}">${ICON.grid}</button><button data-view="list" class="${S.view==='list'?'on':''}">${ICON.list}</button></div>
+    </div>
+  </div>
+  <div class="search ${S.searching?'':'hidden'}">${ICON.search}<input id="q" type="search" placeholder="搜索名称、标签、备注" value="${esc(S.q)}"></div>
+  <div class="seg">
+    <button data-seg="collect" class="${S.seg==='collect'?'on':''}">收藏柜<small>${nC}</small></button>
+    <button data-seg="sold" class="${S.seg==='sold'?'on':''}">已售出<small>${nS}</small></button>
+  </div>
+  <div class="cats">${['全部',...tags].map(c=>`<button data-cat="${esc(c)}" class="${S.cat===c?'on':''}">${esc(c)}</button>`).join('')}</div>
+  <div class="filters">
+    <label class="pick"><span>${SORTS[S.sort]}</span>${ICON.down}
+      <select id="sortSel">${Object.entries(SORTS).map(([k,v])=>`<option value="${k}" ${S.sort===k?'selected':''}>${v}</option>`).join('')}</select></label>
+  </div>`;
+  if (!list.length) {
+    h += `<div class="empty">${ICON.img.replace('width="30" height="30"','width="64" height="64"')}${items.length? '没有符合条件的物品' : '还没有收藏，点下方 + 收录第一件吧'}</div>`;
+  } else if (S.view==='grid') {
+    h += `<div class="grid">${list.map(i=>`
+      <button class="gcard" data-open="${esc(i.id)}">
+        <div class="thumb" ${thumbStyle(i)}>${i.photos&&i.photos[0]?'':ICON.img}</div>
+        <div class="gb"><h3>${esc(i.name||'未命名')}</h3><div class="meta">${metaLine(i)}</div></div>
+      </button>`).join('')}</div>`;
+  } else {
+    h += list.map(i=>`
+      <div class="card">
+        <div class="thumb" data-open="${esc(i.id)}" ${thumbStyle(i)}>${i.photos&&i.photos[0]?'':ICON.img}</div>
+        <div class="body" data-open="${esc(i.id)}">
+          <h3>${esc(i.name||'未命名')}</h3>
+          <div class="chips">${tagChips(i)}</div>
+          <div class="meta">${metaLine(i)}</div>
+        </div>
+        <div class="actions">
+          <button data-open="${esc(i.id)}" aria-label="编辑">${ICON.edit}</button>
+          <button class="del" data-del="${esc(i.id)}" aria-label="删除">${ICON.trash}</button>
+        </div>
+      </div>`).join('');
+  }
+  return h;
+}
+
+/* ================= ledger ================= */
+function entries(){
+  const out=[];
+  for (const i of items){
+    if (isNum(i.buyPrice) && i.buyDate) out.push({type:'buy',date:i.buyDate,amt:i.buyPrice,cur:i.currency||'CNY',item:i});
+    if (i.status==='sold' && isNum(i.sellPrice)) out.push({type:'sell',date:i.sellDate||i.buyDate||today(),amt:i.sellPrice,cur:i.currency||'CNY',item:i});
+  }
+  return out;
+}
+function sumHTML(map, cls){
+  const keys = Object.keys(map);
+  if (!keys.length) return `<div class="v ${cls}"><small>¥</small>0.00</div>`;
+  keys.sort((a,b)=>(a==='CNY'?-1:b==='CNY'?1:0));
+  const [k0,...rest] = keys;
+  const sym = CUR[k0]||k0+' ';
+  return `<div class="v ${cls}"><small>${sym}</small>${map[k0].toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}${rest.map(k=>`<span class="x">+ ${money2(map[k],k)}</span>`).join('')}</div>`;
+}
+function renderLedger(){
+  const [y,m] = S.month.split('-');
+  const month = entries().filter(e=>e.date.startsWith(S.month));
+  const inc={}, exp={};
+  month.forEach(e=>{ const t = e.type==='sell'?inc:exp; t[e.cur]=(t[e.cur]||0)+e.amt; });
+  const tinc={}, texp={};
+  entries().forEach(e=>{ const t = e.type==='sell'?tinc:texp; t[e.cur]=(t[e.cur]||0)+e.amt; });
+  const shown = month.filter(e => S.lf==='all' || (S.lf==='sell'&&e.type==='sell') || (S.lf==='buy'&&e.type==='buy'))
+    .sort((a,b)=>b.date.localeCompare(a.date) || (b.item.createdAt-a.item.createdAt));
+  let h = `
+  <div class="month">
+    <button class="arrow" data-mon="-1">${ICON.back}</button>
+    <label class="mbtn">${ICON.cal}${y}年 ${+m}月<input type="month" id="monSel" value="${S.month}"></label>
+    <button class="arrow" data-mon="1">${ICON.next}</button>
+  </div>
+  <div class="sum">
+    <div><label>本月收入</label>${sumHTML(inc,'in')}</div>
+    <div><label>本月支出</label>${sumHTML(exp,'')}</div>
+  </div>
+  <div class="sum total">
+    <div><label>总收入</label>${sumHTML(tinc,'in')}</div>
+    <div><label>总支出</label>${sumHTML(texp,'')}</div>
+  </div>
+  <div class="lchips">
+    <button data-lf="all" class="${S.lf==='all'?'on':''}">全部</button>
+    <button data-lf="sell" class="${S.lf==='sell'?'on':''}">卖出</button>
+    <button data-lf="buy" class="${S.lf==='buy'?'on':''}">买入</button>
+  </div>`;
+  if (!shown.length) return h + `<div class="empty">${ICON.receipt}暂无记录</div>`;
+  let last='';
+  for (const e of shown){
+    if (e.date!==last){ last=e.date; const d=new Date(e.date+'T00:00:00'); h += `<div class="day"><span>${+e.date.slice(5,7)}月${+e.date.slice(8)}日 星期${'日一二三四五六'[d.getDay()]}</span></div>`; }
+    const i=e.item;
+    h += `<button class="entry" data-open="${esc(i.id)}">
+      <div class="thumb" ${thumbStyle(i)}></div>
+      <div class="nm"><b>${esc(i.name||'未命名')}</b><span>${e.type==='sell'?'卖出':'买入'}${(i.tags||[]).length?' · '+esc(i.tags.join(' / ')):''}</span></div>
+      <div class="amt ${e.type==='sell'?'in':''}">${e.type==='sell'?'+':'-'}${money2(e.amt,e.cur)}</div>
+    </button>`;
+  }
+  return h;
+}
+
+/* ================= render & events ================= */
+function render(){
+  $('#main').innerHTML = S.tab==='cabinet' ? renderCabinet() : renderLedger();
+  $('#tab-cabinet').classList.toggle('on', S.tab==='cabinet');
+  $('#tab-ledger').classList.toggle('on', S.tab==='ledger');
+  saveUI();
+}
+
+document.querySelector('.tabbar').addEventListener('click', e=>{
+  const t = e.target.closest('[data-tab]'); if (t){ S.tab=t.dataset.tab; render(); window.scrollTo(0,0); }
+});
+$('#fab').onclick = () => openEditor(null);
+
+$('#main').addEventListener('click', async e=>{
+  const el = e.target.closest('[data-act],[data-view],[data-seg],[data-cat],[data-open],[data-del],[data-mon],[data-lf]');
+  if (!el) return;
+  const d = el.dataset;
+  if (d.act==='search'){ S.searching=!S.searching; if(!S.searching) S.q=''; render(); if(S.searching) $('#q').focus(); return; }
+  if (d.view){ S.view=d.view; }
+  else if (d.seg){ S.seg=d.seg; }
+  else if (d.cat){ S.cat=d.cat; }
+  else if (d.lf){ S.lf=d.lf; }
+  else if (d.mon){ const [y,m]=S.month.split('-').map(Number); const dt=new Date(y,m-1+Number(d.mon),1); S.month=dt.getFullYear()+'-'+pad(dt.getMonth()+1); }
+  else if (d.open){ openEditor(items.find(i=>i.id===d.open)); return; }
+  else if (d.del){
+    const it = items.find(i=>i.id===d.del);
+    if (!confirm(`删除「${it?.name||'未命名'}」？账本中对应的记录也会一并删除。`)) return;
+    await DB.del(d.del); items = items.filter(i=>i.id!==d.del); toast('已删除');
+  }
+  render();
+});
+$('#main').addEventListener('input', e=>{
+  if (e.target.id==='q'){ S.q=e.target.value; const pos=e.target.selectionStart; render(); const q=$('#q'); q.focus(); q.setSelectionRange(pos,pos); }
+});
+$('#main').addEventListener('change', e=>{
+  if (e.target.id==='sortSel'){ S.sort=e.target.value; render(); }
+  if (e.target.id==='monSel' && e.target.value){ S.month=e.target.value; render(); }
+});
+
+/* ================= editor ================= */
+let draft=null, isNew=false, dirty=false;
+function openEditor(item){
+  isNew = !item; dirty=false;
+  draft = item ? JSON.parse(JSON.stringify(item)) : {
+    id:uid(), name:'', status: S.seg==='sold'?'sold':'collect', tags: S.cat!=='全部'?[S.cat]:[],
+    buyDate:today(), currency:'CNY', buyPrice:null, sellPrice:null, sellDate:'', note:'', photos:[], createdAt:Date.now()
+  };
+  renderEditor();
+  requestAnimationFrame(()=>$('#sheet').classList.add('open'));
+}
+function closeEditor(){ $('#sheet').classList.remove('open'); draft=null; }
+
+function row(icColor, icon, label, valHTML){
+  return `<div class="row"><span class="ic" style="background:${icColor}">${icon}</span><label>${label}</label><div class="val">${valHTML}</div></div>`;
+}
+const mi = p => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+function renderEditor(){
+  const d = draft; const sym = CUR[d.currency]||'';
+  const known = allTags();
+  $('#sheet').innerHTML = `
+  <div class="ebar">
+    <button class="circle" id="eBack">${ICON.back}</button>
+    <h2>${isNew?'收录新物品':'编辑'}</h2>
+    <button class="save" id="eSave">保存</button>
+  </div>
+  <div class="ebody">
+    <div class="photos">
+      ${d.photos.map((p,k)=>`<div class="ph" style="background-image:url('${p}')"><button class="x" data-rmph="${k}">${ICON.x}</button></div>`).join('')}
+      <button class="ph add" id="addPhoto">${ICON.cam}<span>拍照 / 相册</span></button>
+    </div>
+    <div class="group">
+      ${row('#3b82f6', mi('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/>'),'名称',`<input id="fName" placeholder="输入名称" value="${esc(d.name)}">`)}
+      ${row('#ef5fa7', mi('<path d="M3 9h18M3 15h18"/>'),'当前状态',`<div class="mini-seg"><button data-st="collect" class="${d.status==='collect'?'on':''}">收藏中</button><button data-st="sold" class="${d.status==='sold'?'on':''}">已出售</button></div>`)}
+      <div class="row tagrow">
+        <div class="top"><span class="ic" style="background:#8b5cf6">${mi('<path d="M7 7h.01M3 3h8l10 10-8 8L3 11z"/>')}</span><label>标签</label></div>
+        <div class="tagbox">${known.map(t=>`<button class="tag ${d.tags.includes(t)?'on':''}" data-tg="${esc(t)}">${esc(t)}</button>`).join('')}
+          ${d.tags.filter(t=>!known.includes(t)).map(t=>`<button class="tag on" data-tg="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+        <div class="tagadd"><input id="fTag" placeholder="新标签，如 IP 名 kitty"><button id="addTag">添加</button></div>
+      </div>
+    </div>
+    <div class="group">
+      ${row('#f59e0b', mi('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>'),'购买日期',`<input type="date" id="fBuyDate" value="${d.buyDate||''}">`)}
+      ${row('#10b981', mi('<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'),'货币',`<select id="fCur">${Object.keys(CUR).map(k=>`<option value="${k}" ${d.currency===k?'selected':''}>${k} ${CUR[k]}</option>`).join('')}</select>`)}
+      ${row('#06b6d4', mi('<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/>'),'购买价格',`<input id="fBuy" inputmode="decimal" placeholder="${sym} 点击输入" value="${isNum(d.buyPrice)?d.buyPrice:''}">`)}
+      <div id="sellRows" class="${d.status==='sold'?'':'hidden'}">
+        ${row('#ef4444', mi('<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>'),'卖出价格',`<input id="fSell" inputmode="decimal" placeholder="${sym} 点击输入" value="${isNum(d.sellPrice)?d.sellPrice:''}">`)}
+        ${row('#f97316', mi('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>'),'卖出日期',`<input type="date" id="fSellDate" value="${d.sellDate||''}">`)}
+      </div>
+    </div>
+    <div class="group">
+      <div class="row"><span class="ic" style="background:#64748b">${mi('<path d="M4 6h16M4 12h16M4 18h10"/>')}</span><label>备注</label></div>
+      <textarea class="note" id="fNote" placeholder="点击添加备注">${esc(d.note)}</textarea>
+    </div>
+    ${isNew?'':'<button class="dangerbtn" id="eDel">删除此物品</button>'}
+  </div>`;
+}
+function readForm(){
+  const num = v => { v=String(v).replace(/[,，\s]/g,''); if(v==='') return null; const n=parseFloat(v); return isNaN(n)?null:n; };
+  draft.name = $('#fName').value.trim();
+  draft.buyDate = $('#fBuyDate').value;
+  draft.currency = $('#fCur').value;
+  draft.buyPrice = num($('#fBuy').value);
+  draft.sellPrice = num($('#fSell').value);
+  draft.sellDate = $('#fSellDate').value;
+  draft.note = $('#fNote').value;
+}
+const sheet = $('#sheet');
+sheet.addEventListener('input', ()=>{ dirty=true; });
+sheet.addEventListener('change', e=>{ if(e.target.id==='fCur'){ readForm(); renderEditor(); } });
+sheet.addEventListener('click', async e=>{
+  const el = e.target.closest('button'); if(!el) return;
+  if (el.id==='eBack'){ if (dirty && !confirm('放弃未保存的修改？')) return; closeEditor(); return; }
+  if (el.id==='addPhoto'){ $('#filePhoto').click(); return; }
+  readForm();
+  if (el.dataset.rmph!==undefined){ draft.photos.splice(+el.dataset.rmph,1); dirty=true; }
+  else if (el.dataset.st){ draft.status=el.dataset.st; if(draft.status==='sold' && !draft.sellDate) draft.sellDate=today(); dirty=true; }
+  else if (el.dataset.tg){ const t=el.dataset.tg; draft.tags = draft.tags.includes(t)? draft.tags.filter(x=>x!==t) : [...draft.tags,t]; dirty=true; }
+  else if (el.id==='addTag'){ const v=$('#fTag').value.trim(); if(v && !draft.tags.includes(v)) draft.tags.push(v); dirty=true; }
+  else if (el.id==='eDel'){
+    if (!confirm(`删除「${draft.name||'未命名'}」？`)) return;
+    await DB.del(draft.id); items=items.filter(i=>i.id!==draft.id); closeEditor(); render(); toast('已删除'); return;
+  }
+  else if (el.id==='eSave'){
+    if (!draft.name) draft.name='新物品';
+    if (draft.status==='sold' && !draft.sellDate) draft.sellDate=today();
+    draft.updatedAt=Date.now();
+    try { await DB.put(draft); } catch(err){ alert('保存失败：'+err.message); return; }
+    const k=items.findIndex(i=>i.id===draft.id); if(k>=0) items[k]=draft; else items.push(draft);
+    S.seg = draft.status; closeEditor(); render(); toast('已保存'); return;
+  }
+  const y = sheet.scrollTop; renderEditor(); sheet.scrollTop = y;
+});
+sheet.addEventListener('keydown', e=>{ if(e.target.id==='fTag' && e.key==='Enter'){ e.preventDefault(); $('#addTag').click(); } });
+
+/* photo: one input → iOS offers 拍照 / 照片图库 / 选取文件 */
+function compress(file, max=1280, q=0.82){
+  return new Promise((res,rej)=>{
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const r = Math.min(1, max/Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width=Math.round(img.naturalWidth*r); c.height=Math.round(img.naturalHeight*r);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('无法读取图片')); };
+    img.src = url;
+  });
+}
+$('#filePhoto').addEventListener('change', async e=>{
+  const files=[...e.target.files]; e.target.value=''; if(!files.length||!draft) return;
+  readForm();
+  for (const f of files){ try{ draft.photos.push(await compress(f)); }catch(err){ toast(err.message); } }
+  dirty=true; const y=sheet.scrollTop; renderEditor(); sheet.scrollTop=y;
+});
+
+/* ================= settings: backup / categories ================= */
+function openSettings(){
+  const m=document.createElement('div'); m.className='modal';
+  m.innerHTML = `<div class="box">
+    <h3>设置</h3>
+    <p>数据只保存在这台手机的这个主屏幕 App 里。删除 App 图标或清除 Safari 网站数据会丢失全部记录，请定期导出备份。</p>
+    <div class="mbtns">
+      <button class="pk" data-m="export">导出备份（共 ${items.length} 件）</button>
+      <button data-m="import">从备份恢复</button>
+      <button data-m="close">关闭</button>
+    </div></div>`;
+  m.addEventListener('click', async e=>{
+    if (e.target===m) return m.remove();
+    const b=e.target.closest('[data-m]'); if(!b) return;
+    if (b.dataset.m==='close') m.remove();
+    if (b.dataset.m==='export') exportData();
+    if (b.dataset.m==='import') $('#fileImport').click();
+  });
+  document.body.appendChild(m);
+}
+async function exportData(){
+  const data = JSON.stringify({app:'kitty-ledger',version:1,exportedAt:new Date().toISOString(),items});
+  const name = `收藏备份-${today()}.json`;
+  const file = new File([data], name, {type:'application/json'});
+  if (navigator.canShare && navigator.canShare({files:[file]})) {
+    try { await navigator.share({files:[file], title:name}); return; } catch(e){ if(e.name==='AbortError') return; }
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+$('#fileImport').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const d=JSON.parse(await f.text()); if(!Array.isArray(d.items)) throw new Error('不是有效的备份文件');
+    if(!confirm(`备份中有 ${d.items.length} 件物品。同 ID 的会被覆盖，其余保留。继续？`)) return;
+    const clean = d.items.map(sanitize).filter(Boolean);
+    for (const it of clean) await DB.put(it);
+    items = await DB.all(); document.querySelector('.modal')?.remove(); render(); toast(`已恢复 ${clean.length} 件`);
+  }catch(err){ alert('恢复失败：'+err.message); }
+});
+$('#main').addEventListener('click', e=>{ if(e.target.closest('[data-act="settings"]')) openSettings(); });
+
+/* ================= boot ================= */
+(async ()=>{
+  try { items = (await DB.all()).map(sanitize).filter(Boolean); }
+  catch(e){ alert('本地数据库打开失败：'+e.message); }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  render();
+  if ('serviceWorker' in navigator && location.protocol!=='file:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
