@@ -179,6 +179,14 @@ svg{display:block}
 .mbtns button{height:48px;border-radius:12px;background:var(--bg2);font-size:16px}
 .mbtns button.pk{background:var(--pink);color:#fff;font-weight:600}
 .modal textarea{width:100%;min-height:70px;border-radius:12px;border:0;background:var(--bg2);padding:10px 12px;outline:none;margin-bottom:10px}
+.tmlist{max-height:55vh;overflow-y:auto;margin:0 -4px 12px;padding:0 4px}
+.tmrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg2)}
+.tmrow .tn{flex:1;min-width:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tmrow .tn small{color:var(--sub);font-size:12px;margin-left:6px}
+.tmrow button{width:38px;height:38px;border-radius:10px;background:var(--bg2);font-size:16px;display:flex;align-items:center;justify-content:center}
+.tmrow button:disabled{opacity:.3}
+.tmrow button.del{width:auto;padding:0 12px;color:var(--red);font-size:14px}
+.tmempty{color:var(--sub);text-align:center;padding:24px 0;font-size:14px}
 #toast{position:fixed;left:50%;bottom:calc(110px + var(--safe-b));transform:translateX(-50%);background:rgba(30,30,34,.88);color:#fff;
   padding:10px 18px;border-radius:20px;font-size:14px;z-index:99;opacity:0;transition:opacity .2s;pointer-events:none}
 #toast.show{opacity:1}
@@ -249,6 +257,7 @@ const DB = (() => {
       if (thumbRec === null) t.objectStore('thumbs').delete(item.id);
       else if (thumbRec) t.objectStore('thumbs').put(thumbRec, item.id);
     }),
+    putItems: list => tx(['items'],'readwrite',t=>{ const st=t.objectStore('items'); list.forEach(i=>st.put(i)); }),
     delItem: item => tx(['items','photos','thumbs'],'readwrite',t=>{
       t.objectStore('items').delete(item.id); t.objectStore('thumbs').delete(item.id);
       (item.photoIds||[]).forEach(id=>t.objectStore('photos').delete(id));
@@ -261,6 +270,7 @@ const fromRec = r => r && r.buf ? new Blob([r.buf], {type: r.type || 'image/jpeg
 /* ================= state ================= */
 const CUR = {CNY:'¥',JPY:'J¥',AUD:'A$',USD:'$',HKD:'HK$',TWD:'NT$',KRW:'₩',EUR:'€',GBP:'£'};
 let items = [];
+let tagOrder = [];   // user-chosen order of tags (meta 'tagOrder')
 const today = () => { const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
 const pad = n => String(n).padStart(2,'0');
 const S = { tab:'cabinet', seg:'collect', cat:'全部', sort:'recent', view:'list', q:'', searching:false,
@@ -380,7 +390,12 @@ const ICON = {
 };
 
 /* ================= cabinet ================= */
-function allTags(){ const s=new Set(); [...items].sort((a,b)=>a.createdAt-b.createdAt).forEach(i=>(i.tags||[]).forEach(t=>s.add(t))); return [...s]; }
+function allTags(){
+  const s=new Set(); [...items].sort((a,b)=>a.createdAt-b.createdAt).forEach(i=>(i.tags||[]).forEach(t=>s.add(t)));
+  const ord = tagOrder.filter(t=>s.has(t));
+  return [...ord, ...[...s].filter(t=>!ord.includes(t))];
+}
+const cleanOrder = a => Array.isArray(a) ? [...new Set(a.filter(t=>typeof t==='string'&&t.trim()).map(t=>t.trim().slice(0,40)))] : [];
 function filtered(){
   const q = S.q.trim().toLowerCase();
   let list = items.filter(i => i.status === S.seg);
@@ -486,9 +501,17 @@ function renderCabinet(){
     <label class="pick"><span>${SORTS[S.sort]}</span>${ICON.down}
       <select id="sortSel">${Object.entries(SORTS).map(([k,v])=>`<option value="${k}" ${S.sort===k?'selected':''}>${v}</option>`).join('')}</select></label>
   </div>`;
-  if (!list.length) h += `<div class="empty">${ICON.img.replace('width="30" height="30"','width="64" height="64"')}${items.length? '没有符合条件的物品' : '还没有收藏，点下方 + 收录第一件吧'}</div>`;
-  else h += `<div id="vlist" class="vlist ${S.view==='grid'?'g':''}"></div>`;
-  return h;
+  return h + `<div id="listArea">${listHTML(list)}</div>`;
+}
+function listHTML(list){
+  if (!list.length) return `<div class="empty">${ICON.img.replace('width="30" height="30"','width="64" height="64"')}${items.length? '没有符合条件的物品' : '还没有收藏，点下方 + 收录第一件吧'}</div>`;
+  return `<div id="vlist" class="vlist ${S.view==='grid'?'g':''}"></div>`;
+}
+/* search: refresh only the list, never the input box (keeps the keyboard / 中文输入法 intact) */
+function refreshList(){
+  const box = $('#listArea'); if (!box) return;
+  const list = filtered(); VL.list = list;
+  box.innerHTML = listHTML(list); vlMount();
 }
 
 /* ================= ledger ================= */
@@ -588,7 +611,10 @@ $('#main').addEventListener('click', async e=>{
   render();
 });
 $('#main').addEventListener('input', e=>{
-  if (e.target.id==='q'){ S.q=e.target.value; const pos=e.target.selectionStart; render(); const q=$('#q'); q.focus(); q.setSelectionRange(pos,pos); }
+  if (e.target.id==='q'){ if (e.isComposing) return; S.q=e.target.value; refreshList(); }
+});
+$('#main').addEventListener('compositionend', e=>{
+  if (e.target.id==='q'){ S.q=e.target.value; refreshList(); }
 });
 $('#main').addEventListener('change', e=>{
   if (e.target.id==='sortSel'){ S.sort=e.target.value; render(); }
@@ -740,6 +766,7 @@ function openSettings(){
     <div class="mbtns">
       <button class="pk" data-m="export">导出备份（共 ${items.length} 件）</button>
       <button data-m="import">从备份恢复</button>
+      <button data-m="tags">管理标签</button>
       <button data-m="close">关闭</button>
     </div></div>`;
   m.addEventListener('click', async e=>{
@@ -748,14 +775,61 @@ function openSettings(){
     if (b.dataset.m==='close') m.remove();
     if (b.dataset.m==='export') exportData(b);
     if (b.dataset.m==='import') $('#fileImport').click();
+    if (b.dataset.m==='tags'){ m.remove(); openTagManager(); }
   });
   document.body.appendChild(m);
+}
+
+/* ================= settings: tags (order / delete) ================= */
+function openTagManager(){
+  const m=document.createElement('div'); m.className='modal';
+  const draw = () => {
+    const tags = allTags();
+    const cnt = t => items.filter(i=>(i.tags||[]).includes(t)).length;
+    m.innerHTML = `<div class="box">
+      <h3>管理标签</h3>
+      <p>用 ↑ ↓ 调整主界面和新增物品时的标签顺序。删除标签只会把它从物品上去掉，物品本身不会删除。</p>
+      <div class="tmlist">${tags.length ? tags.map((t,k)=>`<div class="tmrow">
+        <div class="tn">${esc(t)}<small>${cnt(t)} 件</small></div>
+        <button data-up="${k}" ${k===0?'disabled':''} aria-label="上移">↑</button>
+        <button data-down="${k}" ${k===tags.length-1?'disabled':''} aria-label="下移">↓</button>
+        <button class="del" data-tdel="${k}">删除</button>
+      </div>`).join('') : '<div class="tmempty">还没有标签。在新增物品时输入标签后，会出现在这里。</div>'}</div>
+      <div class="mbtns"><button class="pk" data-m="close">完成</button></div></div>`;
+  };
+  m.addEventListener('click', async e=>{
+    if (e.target===m) return m.remove();
+    const b=e.target.closest('button'); if(!b || b.disabled) return;
+    if (b.dataset.m==='close') return m.remove();
+    const tags = allTags();
+    try {
+      if (b.dataset.up!==undefined || b.dataset.down!==undefined){
+        const k = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up!==undefined ? k-1 : k+1;
+        if (j<0 || j>=tags.length) return;
+        [tags[k],tags[j]] = [tags[j],tags[k]];
+        tagOrder = tags; await DB.setMeta('tagOrder', tagOrder);
+      } else if (b.dataset.tdel!==undefined){
+        const t = tags[+b.dataset.tdel]; if (t===undefined) return;
+        const used = items.filter(i=>(i.tags||[]).includes(t));
+        if (!confirm(`删除标签「${t}」？\n${used.length} 件物品会去掉这个标签，物品本身不会删除。`)) return;
+        const changed = used.map(i=>({...i, tags:i.tags.filter(x=>x!==t)}));
+        await DB.putItems(changed);
+        const byId = new Map(changed.map(i=>[i.id,i])); items = items.map(i=>byId.get(i.id)||i);
+        tagOrder = tagOrder.filter(x=>x!==t); await DB.setMeta('tagOrder', tagOrder);
+        if (S.cat===t) S.cat='全部';
+        toast('已删除标签');
+      } else return;
+    } catch(err){ alert('操作失败：'+err.message); return; }
+    const y = m.querySelector('.tmlist')?.scrollTop || 0;
+    draw(); render(); const l=m.querySelector('.tmlist'); if (l) l.scrollTop=y;
+  });
+  draw(); document.body.appendChild(m);
 }
 /* backup format unchanged: one JSON, photos inline as dataURLs (old backups stay compatible) */
 async function exportData(btn){
   const label = btn.textContent; btn.disabled = true;
   try {
-    const parts = [`{"app":"kitty-ledger","version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"items":[`];
+    const parts = [`{"app":"kitty-ledger","version":1,"exportedAt":${JSON.stringify(new Date().toISOString())},"tagOrder":${JSON.stringify(allTags())},"items":[`];
     for (let k=0; k<items.length; k++){
       const it = items[k]; btn.textContent = `正在打包 ${k+1}/${items.length}…`;
       const photos = [];
@@ -787,6 +861,7 @@ $('#fileImport').addEventListener('change', async e=>{
       if (n%10===0) toast(`正在恢复 ${n}/${d.items.length}…`, 10000);
     }
     items = (await DB.all()).map(sanitize).filter(Boolean);
+    if (Array.isArray(d.tagOrder)){ tagOrder = cleanOrder(d.tagOrder); await DB.setMeta('tagOrder', tagOrder); }
     document.querySelector('.modal')?.remove(); render(); toast(`已恢复 ${n} 件`);
   }catch(err){ alert('恢复失败：'+err.message); }
 });
@@ -819,6 +894,7 @@ async function shrinkOldPhotos(){
       toast('数据升级完成');
     }
     items = (legacy.length ? await DB.all() : raw).map(sanitize).filter(Boolean);
+    tagOrder = cleanOrder(await DB.getMeta('tagOrder'));
     await shrinkOldPhotos();
   }
   catch(e){ alert('本地数据库打开失败：'+e.message); }
