@@ -236,6 +236,9 @@ const DB = (() => {
   }
   return {
     all: () => tx(['items'],'readonly',t=>t.objectStore('items').getAll()),
+    getMeta: k => tx(['meta'],'readonly',t=>t.objectStore('meta').get(k)),
+    setMeta: (k,v) => tx(['meta'],'readwrite',t=>{ t.objectStore('meta').put(v,k); }),
+    putPhoto: (id, rec) => tx(['photos'],'readwrite',t=>{ t.objectStore('photos').put(rec,id); }),
     getPhoto: async id => fromRec(await tx(['photos'],'readonly',t=>t.objectStore('photos').get(id))),
     getThumb: async id => fromRec(await tx(['thumbs'],'readonly',t=>t.objectStore('thumbs').get(id))),
     /* newPhotos: [{id, rec}], removedIds: [photoId], thumbRec: rec | null (delete) | undefined (keep) */
@@ -312,7 +315,8 @@ function resizeToBlob(src, max, q){
     img.src = url;
   });
 }
-const makePhoto = f => resizeToBlob(f, 1280, 0.82);
+const PHOTO_MAX = 1024, PHOTO_Q = 0.72, PHOTO_VER = 2;   // 够看即可, 约 100–150KB/张
+const makePhoto = f => resizeToBlob(f, PHOTO_MAX, PHOTO_Q);
 const makeThumb = b => resizeToBlob(b, 360, 0.75);
 
 /* convert an item that still carries inline dataURL photos (old version / backup file) */
@@ -787,6 +791,23 @@ $('#fileImport').addEventListener('change', async e=>{
   }catch(err){ alert('恢复失败：'+err.message); }
 });
 
+/* one-time: re-encode photos saved at the old, larger size */
+async function shrinkOldPhotos(){
+  if ((await DB.getMeta('photoVer')) >= PHOTO_VER) return;
+  const ids = items.flatMap(i=>i.photoIds);
+  let k=0, saved=0;
+  for (const id of ids){
+    k++; if (k%5===0) toast(`正在压缩旧照片 ${k}/${ids.length}…`, 60000);
+    try {
+      const b = await DB.getPhoto(id); if (!b || b.size < 160*1024) continue;
+      const nb = await resizeToBlob(b, PHOTO_MAX, PHOTO_Q);
+      if (nb.size < b.size) { await DB.putPhoto(id, await toRec(nb)); saved += b.size-nb.size; }
+    } catch(e){}
+  }
+  await DB.setMeta('photoVer', PHOTO_VER);
+  if (saved > 1024*1024) toast(`照片压缩完成，节省 ${Math.round(saved/1024/1024)}MB`);
+}
+
 /* ================= boot ================= */
 (async ()=>{
   try {
@@ -798,6 +819,7 @@ $('#fileImport').addEventListener('change', async e=>{
       toast('数据升级完成');
     }
     items = (legacy.length ? await DB.all() : raw).map(sanitize).filter(Boolean);
+    await shrinkOldPhotos();
   }
   catch(e){ alert('本地数据库打开失败：'+e.message); }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
