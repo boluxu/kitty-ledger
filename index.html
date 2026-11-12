@@ -180,7 +180,9 @@ svg{display:block}
 .mbtns button.pk{background:var(--pink);color:#fff;font-weight:600}
 .modal textarea{width:100%;min-height:70px;border-radius:12px;border:0;background:var(--bg2);padding:10px 12px;outline:none;margin-bottom:10px}
 .tmlist{max-height:55vh;overflow-y:auto;margin:0 -4px 12px;padding:0 4px}
-.tmrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg2)}
+.tmrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bg2);background:#fff;transition:transform .18s}
+.tmrow.drag{transition:none;position:relative;z-index:2;box-shadow:0 6px 18px rgba(0,0,0,.15);border-radius:12px}
+.tmrow .grip{width:40px;height:40px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--sub);touch-action:none;cursor:grab;-webkit-user-select:none;user-select:none}
 .tmrow .tn{flex:1;min-width:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tmrow .tn small{color:var(--sub);font-size:12px;margin-left:6px}
 .tmrow button{width:38px;height:38px;border-radius:10px;background:var(--bg2);font-size:16px;display:flex;align-items:center;justify-content:center}
@@ -788,11 +790,10 @@ function openTagManager(){
     const cnt = t => items.filter(i=>(i.tags||[]).includes(t)).length;
     m.innerHTML = `<div class="box">
       <h3>管理标签</h3>
-      <p>用 ↑ ↓ 调整主界面和新增物品时的标签顺序。删除标签只会把它从物品上去掉，物品本身不会删除。</p>
+      <p>按住左边的 ≡ 上下拖动，调整主界面和新增物品时的标签顺序。删除标签只会把它从物品上去掉，物品本身不会删除。</p>
       <div class="tmlist">${tags.length ? tags.map((t,k)=>`<div class="tmrow">
+        <span class="grip" aria-label="拖动排序"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg></span>
         <div class="tn">${esc(t)}<small>${cnt(t)} 件</small></div>
-        <button data-up="${k}" ${k===0?'disabled':''} aria-label="上移">↑</button>
-        <button data-down="${k}" ${k===tags.length-1?'disabled':''} aria-label="下移">↓</button>
         <button class="del" data-tdel="${k}">删除</button>
       </div>`).join('') : '<div class="tmempty">还没有标签。在新增物品时输入标签后，会出现在这里。</div>'}</div>
       <div class="mbtns"><button class="pk" data-m="close">完成</button></div></div>`;
@@ -803,12 +804,7 @@ function openTagManager(){
     if (b.dataset.m==='close') return m.remove();
     const tags = allTags();
     try {
-      if (b.dataset.up!==undefined || b.dataset.down!==undefined){
-        const k = +(b.dataset.up ?? b.dataset.down), j = b.dataset.up!==undefined ? k-1 : k+1;
-        if (j<0 || j>=tags.length) return;
-        [tags[k],tags[j]] = [tags[j],tags[k]];
-        tagOrder = tags; await DB.setMeta('tagOrder', tagOrder);
-      } else if (b.dataset.tdel!==undefined){
+      if (b.dataset.tdel!==undefined){
         const t = tags[+b.dataset.tdel]; if (t===undefined) return;
         const used = items.filter(i=>(i.tags||[]).includes(t));
         if (!confirm(`删除标签「${t}」？\n${used.length} 件物品会去掉这个标签，物品本身不会删除。`)) return;
@@ -822,6 +818,42 @@ function openTagManager(){
     } catch(err){ alert('操作失败：'+err.message); return; }
     const y = m.querySelector('.tmlist')?.scrollTop || 0;
     draw(); render(); const l=m.querySelector('.tmlist'); if (l) l.scrollTop=y;
+  });
+  /* drag to reorder: press the ≡ handle and move up/down */
+  m.addEventListener('touchstart', e=>{ if (e.target.closest('.grip')) e.preventDefault(); }, {passive:false});
+  m.addEventListener('pointerdown', e=>{
+    const g = e.target.closest('.grip'); if (!g) return;
+    e.preventDefault();
+    const list = m.querySelector('.tmlist'), row = g.closest('.tmrow'), rows = [...list.children];
+    const from = rows.indexOf(row), h = row.offsetHeight, y0 = e.clientY, s0 = list.scrollTop;
+    let to = from, lastY = y0, timer = 0;
+    row.classList.add('drag'); try { g.setPointerCapture(e.pointerId); } catch(_){}
+    const layout = () => {
+      const dy = lastY - y0 + (list.scrollTop - s0);
+      row.style.transform = `translateY(${dy}px)`;
+      to = Math.max(0, Math.min(rows.length-1, from + Math.round(dy/h)));
+      rows.forEach((r,i)=>{ if (r===row) return;
+        const sh = (from<to && i>from && i<=to) ? -h : (from>to && i<from && i>=to) ? h : 0;
+        r.style.transform = sh ? `translateY(${sh}px)` : ''; });
+    };
+    const edge = () => {   // auto-scroll when dragging near the top / bottom of a long list
+      const b = list.getBoundingClientRect();
+      const v = lastY < b.top+40 ? -8 : lastY > b.bottom-40 ? 8 : 0;
+      if (v) { list.scrollTop += v; layout(); }
+      timer = requestAnimationFrame(edge);
+    };
+    timer = requestAnimationFrame(edge);
+    const move = ev => { lastY = ev.clientY; layout(); };
+    const end = async () => {
+      cancelAnimationFrame(timer);
+      g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', end); g.removeEventListener('pointercancel', end);
+      if (to === from){ rows.forEach(r=>r.style.transform=''); row.classList.remove('drag'); return; }
+      const tags = allTags(); const [t] = tags.splice(from,1); tags.splice(to,0,t);
+      tagOrder = tags;
+      const y = list.scrollTop; draw(); render(); const l = m.querySelector('.tmlist'); if (l) l.scrollTop = y;
+      try { await DB.setMeta('tagOrder', tagOrder); } catch(err){ alert('保存顺序失败：'+err.message); }
+    };
+    g.addEventListener('pointermove', move); g.addEventListener('pointerup', end); g.addEventListener('pointercancel', end);
   });
   draw(); document.body.appendChild(m);
 }

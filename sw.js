@@ -1,4 +1,4 @@
-const V='kitty-v9'; const FILES=['./','index.html','manifest.json','icon-180.png','icon-192.png','icon-512.png'];
+const V='kitty-v10'; const FILES=['./','index.html','manifest.json','icon-180.png','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(FILES)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('kitty-')&&k!==V).map(k=>caches.delete(k)))));self.clients.claim();});
 // network-first so updates show up; fall back to cache offline
